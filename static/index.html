@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SiteMortem · Find what's broken. Fix it. Prove it worked.</title>
+  <meta name="description" content="SiteMortem uses AI agents to audit websites, generate targeted code repairs, and verify every accepted fix in a real browser. NVIDIA Nemotron on Nebius Token Factory." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%2376b900'/%3E%3Cpath d='M5 15h4.2l2.4-6 3.6 11 2.4-6.5 1.6 1.5H23' fill='none' stroke='%230d1400' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/static/styles.css?v=finish7" />
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <a class="brand" href="#/" aria-label="SiteMortem home"><svg class="logo" viewBox="0 0 28 28" width="28" height="28" aria-hidden="true" focusable="false"><rect width="28" height="28" rx="7" fill="#76b900"/><path d="M5 15h4.2l2.4-6 3.6 11 2.4-6.5 1.6 1.5H23" fill="none" stroke="#0d1400" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>SiteMortem</span></a>
+    <nav aria-label="Primary" class="links">
+      <a href="#/" data-route="dashboard">Dashboard</a>
+      <a href="#/history" data-route="history">History</a>
+      <a href="#/help" data-route="help">Help</a>
+    </nav>
+    <div class="right">
+      <span class="pill" id="modePill">Checking…</span>
+      <button class="icon-btn" id="theme" type="button" aria-label="Switch to dark theme" data-tip="Switch to dark theme">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <!-- ============================================================ LAUNCH -->
+    <section id="view-launch" aria-labelledby="heroTitle">
+      <div class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow"><span>NVIDIA Nemotron</span><i aria-hidden="true"></i><span>Nebius Token Factory</span></p>
+          <h1 id="heroTitle">Find what's broken.<br /><span class="grad">Fix it. Prove it worked.</span></h1>
+          <p class="sub">SiteMortem uses AI agents to audit websites, generate targeted code repairs, and verify every accepted fix in a real browser.</p>
+          <div class="hero-actions">
+            <a class="btn primary big" href="#launch" id="cta">Start an audit <span aria-hidden="true">→</span></a>
+            <a class="btn big ghost" href="#/help">Read how it works</a>
+          </div>
+        </div>
+        <figure class="preview" aria-labelledby="previewCap">
+          <div class="pv-bar"><span class="pv-file">index.html</span><span class="pv-rule">image-alt</span><span class="stat verified">Verified</span></div>
+          <pre class="pv-diff" aria-label="Example patch"><span class="pv-l d"><b aria-hidden="true">−</b><span>&lt;img src="img/ethiopia.svg" width="160" height="120"&gt;</span></span><span class="pv-l a"><b aria-hidden="true">+</b><span>&lt;img src="img/ethiopia.svg" alt="Ethiopia Guji coffee bag" width="160" height="120"&gt;</span></span></pre>
+          <dl class="pv-checks">
+            <div><dt>Re-audit</dt><dd>image-alt: 6 issues → 0</dd></div>
+            <div><dt>New issues</dt><dd>None</dd></div>
+            <div><dt>Decision</dt><dd>Kept in the final patch</dd></div>
+          </dl>
+          <figcaption id="previewCap">Example fix from the bundled demo storefront, scripted demo engine.</figcaption>
+        </figure>
+      </div>
+
+      <ul class="trust" aria-label="Why you can trust a SiteMortem result">
+        <li><b>Real browser audit</b><span>axe-core and Chromium decide what is broken, not a model's opinion.</span></li>
+        <li><b>Verified or reverted</b><span>A fix is kept only if the re-audit passes. Otherwise it rolls back.</span></li>
+        <li><b>Your files stay untouched</b><span>Patches run on a temporary copy, hash-checked before and after.</span></li>
+      </ul>
+
+      <form id="form" class="card launch" aria-labelledby="launchTitle" novalidate>
+        <h2 id="launchTitle" class="h3">Audit a site</h2>
+
+        <fieldset class="seg">
+          <legend>What should SiteMortem audit?</legend>
+          <label class="opt on"><input type="radio" name="mode" value="demo" checked /><span class="opt-t">Demo storefront</span><small>A small coffee-shop site with planted accessibility and runtime bugs</small></label>
+          <label class="opt"><input type="radio" name="mode" value="upload" /><span class="opt-t">Upload your own site</span><small>A .zip of a static website (HTML, CSS, JS, images), up to 8 MB</small></label>
+        </fieldset>
+
+        <div id="uploadBox" hidden>
+          <input type="file" id="zip" accept=".zip,application/zip" class="sr-only" aria-label="Site archive (.zip)" aria-describedby="zipStatus" />
+          <div class="drop" id="drop">
+            <button type="button" class="btn" id="pick">Choose .zip file</button>
+            <span class="fine">or drop it here</span>
+          </div>
+          <div class="file" id="fileRow" hidden>
+            <span class="file-ic" aria-hidden="true">▤</span>
+            <span class="file-meta"><b id="fileName"></b><small id="fileSize"></small></span>
+            <span class="chip" id="zipChip">Ready</span>
+            <button type="button" class="btn sm" id="replaceZip">Replace</button>
+            <button type="button" class="btn sm ghost" id="clearZip">Clear</button>
+          </div>
+          <p id="zipStatus" class="fine" role="status">No file selected. <a href="/api/demo-site.zip">Download the demo site as a zip</a> to try the upload path.</p>
+        </div>
+
+        <div class="engine">
+          <label class="check"><input type="checkbox" id="scripted" checked /> <span>Use the scripted demo (no live model calls)</span></label>
+          <p class="fine" id="engineNote" role="status"></p>
+        </div>
+
+        <div id="launchError" class="alert" role="alert" hidden></div>
+
+        <div class="actions">
+          <button class="btn primary big" id="go" type="submit"><span class="spin" aria-hidden="true" hidden></span><span id="goText">Run audit</span></button>
+          <span class="fine" id="goNote"></span>
+        </div>
+      </form>
+      <span id="launch" class="anchor"></span>
+
+      <section class="process" aria-labelledby="processTitle">
+        <h2 id="processTitle" class="h3">How a repair is made, and proven</h2>
+        <ol class="steps">
+          <li class="step"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><h3>Detect</h3><p>axe-core finds WCAG violations. Playwright captures JavaScript errors and failed requests in real Chromium.</p></li>
+          <li class="step"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 5h18M6 12h12M10 19h4"/></svg></span><h3>Triage</h3><p>Nemotron Nano ranks every issue group in parallel so the highest-impact problems come first.</p></li>
+          <li class="step"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m14.7 6.3 3 3L8 19l-4 1 1-4Z"/><path d="m13 8 3 3"/></svg></span><h3>Fix</h3><p>Ultra finds root causes, Super writes a minimal patch. It is validated, then applied to a temporary copy.</p></li>
+          <li class="step"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6Z"/><path d="m9 12 2 2 4-4"/></svg></span><h3>Verify</h3><p>The audit runs again. A patch is kept only if the targeted issues are gone and nothing new appears; otherwise it is rolled back.</p></li>
+        </ol>
+      </section>
+    </section>
+
+    <!-- ============================================================ RUN -->
+    <section id="view-run" hidden aria-labelledby="runTitle">
+      <div class="run-head">
+        <div>
+          <h1 id="runTitle" class="h2">Audit run</h1>
+          <p class="fine" id="runMeta"></p>
+        </div>
+        <div class="run-actions">
+          <span class="chip" id="runStatus">Starting</span>
+          <button type="button" class="btn sm" id="stop" hidden>Stop run</button>
+          <button type="button" class="btn sm primary" id="again" hidden>Start new audit</button>
+        </div>
+      </div>
+
+      <div id="banner" class="alert" role="status" hidden></div>
+
+      <section aria-labelledby="metricsTitle">
+        <h2 id="metricsTitle" class="sr-only">Summary metrics</h2>
+        <div class="metrics" id="metrics"></div>
+        <details class="how">
+          <summary>How these numbers are calculated</summary>
+          <p>Each issue is one unique finding (rule + page + element, or error message) from the browser audit. Every issue is in exactly one category, so
+          accessibility + JavaScript + network always equals the total. <b>Resolved</b> is the total before minus the total now, and only drops after a patch is verified by a
+          re-audit. <b>Verified patches</b> and <b>rejected patches</b> count patch attempts: verified means the backend re-audit confirmed the targeted issues are gone with nothing new;
+          rejected includes rolled-back attempts and attempts that never produced a usable patch.</p>
+        </details>
+      </section>
+
+      <div class="run-grid">
+        <aside class="side" aria-label="Run progress">
+          <section class="card pad" aria-labelledby="pipeTitle"><h2 id="pipeTitle" class="sec">Repair pipeline</h2><ol id="timeline" class="timeline"></ol></section>
+          <section class="card pad" aria-labelledby="actTitle">
+            <h2 id="actTitle" class="sec">Agent activity</h2>
+            <ul id="activity" class="activity" tabindex="0" aria-label="Activity log, newest last"></ul>
+            <p class="fine" id="actEmpty">Waiting for the first event from the server…</p>
+          </section>
+          <section class="card pad" id="modelsBox" hidden></section>
+          <section class="card pad" id="usage" hidden></section>
+        </aside>
+
+        <div class="main-col">
+          <div class="tabs" role="tablist" aria-label="Results">
+            <button role="tab" id="tab-issues" aria-controls="panel-issues" aria-selected="true">Issues <span class="count" id="cnt-issues">0</span></button>
+            <button role="tab" id="tab-patches" aria-controls="panel-patches" aria-selected="false" tabindex="-1">Patches <span class="count" id="cnt-patches">0</span></button>
+            <button role="tab" id="tab-summary" aria-controls="panel-summary" aria-selected="false" tabindex="-1">Summary</button>
+          </div>
+
+          <div role="tabpanel" id="panel-issues" aria-labelledby="tab-issues">
+            <div class="toolbar">
+              <div class="field"><label for="q">Search issues</label><input id="q" type="search" placeholder="Title, ID, file, message…" autocomplete="off" /></div>
+              <div class="field"><label for="sort">Sort by</label>
+                <select id="sort"><option value="severity">Severity</option><option value="status">Status</option><option value="file">File</option></select></div>
+            </div>
+            <div class="filters" role="group" aria-label="Filter issues" id="filters"></div>
+            <p class="fine" id="issueCount" role="status"></p>
+            <div id="issueList" class="list"></div>
+            <button type="button" class="btn" id="moreIssues" hidden>Show more</button>
+          </div>
+
+          <div role="tabpanel" id="panel-patches" aria-labelledby="tab-patches" hidden>
+            <div class="toolbar">
+              <p class="fine grow" id="patchSummary"></p>
+              <button type="button" class="btn sm" id="expandAll">Expand all</button>
+              <button type="button" class="btn sm" id="collapseAll">Collapse all</button>
+            </div>
+            <div id="patchList" class="list"></div>
+          </div>
+
+          <div role="tabpanel" id="panel-summary" aria-labelledby="tab-summary" hidden><div id="summary"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ HISTORY -->
+    <section id="view-history" hidden aria-labelledby="histTitle">
+      <h1 id="histTitle" class="h2">Audit history</h1>
+      <p class="sub left">Saved only in this browser. Nothing is sent to a server.</p>
+      <div id="historyBody"></div>
+    </section>
+
+    <!-- ============================================================ HELP -->
+    <section id="view-help" hidden aria-labelledby="helpTitle">
+      <h1 id="helpTitle" class="h2">Help</h1>
+      <div class="help">
+        <section class="card pad"><h2 class="h3">Demo vs live</h2>
+          <p><b>Scripted demo</b> makes no model calls. Patches are scripted and only cover the bundled storefront; the audit and every verification are real, and the UI labels it as scripted.</p>
+          <p><b>Live</b> calls NVIDIA Nemotron through Nebius Token Factory. It needs <code>NEBIUS_API_KEY</code> in <code>.env</code>. Live never falls back to scripted fixes: if something is misconfigured the run stops and says why. Tavily guidance is optional and reported as skipped if not configured.</p></section>
+        <section class="card pad"><h2 class="h3">Reading patch statuses</h2>
+          <dl>
+            <dt><span class="stat proposed">PROPOSED</span></dt><dd>A patch passed validation and was applied to a temporary copy. It has not been checked yet.</dd>
+            <dt><span class="stat verifying">VERIFYING</span></dt><dd>The browser audit is re-running against the patched copy.</dd>
+            <dt><span class="stat verified">VERIFIED</span></dt><dd>The re-audit confirmed the targeted issues are gone and no new issues appeared. The patch is kept.</dd>
+            <dt><span class="stat rolled">ROLLED BACK</span></dt><dd>The patch applied but the re-audit failed it, so it was reverted. It is not part of the final patch.</dd>
+            <dt><span class="stat rejected">REJECTED</span></dt><dd>No usable patch: the model output was invalid, matched nothing, or tried something not allowed. Nothing was applied.</dd>
+          </dl></section>
+        <section class="card pad"><h2 class="h3">Troubleshooting</h2>
+          <ul>
+            <li><b>"Live mode needs NEBIUS_API_KEY"</b>: add the key to <code>.env</code> and restart the server.</li>
+            <li><b>Model not found / configuration problem</b>: run <code>python scripts/list_models.py</code> and pin the IDs in <code>.env</code>.</li>
+            <li><b>Invalid ZIP</b>: use a plain .zip of static files (HTML, CSS, JS, images, fonts). Executables, scripts, symlinks and absolute paths are rejected.</li>
+            <li><b>Connection lost</b>: the page resumes the run automatically from the last event it saw; if that fails, start a new audit.</li>
+            <li><b>Chromium missing</b>: run <code>playwright install chromium</code>.</li>
+          </ul></section>
+        <section class="card pad"><h2 class="h3">Limits, stated plainly</h2>
+          <ul><li>Automated testing covers only part of WCAG. A clean result is not a compliance certificate.</li>
+          <li>Generated alt text, labels and colours need human review before merging.</li>
+          <li>Static sites only; up to 6 linked pages; external hosts are blocked during the audit for safety.</li></ul></section>
+      </div>
+    </section>
+  </main>
+
+  <div id="srStatus" class="sr-only" role="status" aria-live="polite"></div>
+  <footer>Built for the Nebius × NVIDIA Global AI Hackathon · MIT licensed · axe-core by Deque (MPL-2.0)</footer>
+  <script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

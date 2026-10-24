@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brewhouse Coffee Co.</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="bar">
+    <a href="index.html" class="logo"><img src="img/logo.svg" width="36" height="36"></a>
+    <nav>
+      <a href="index.html">Shop</a>
+      <a href="about.html">About</a>
+      <a href="#cart" id="cart-link"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M3 4h2l2 12h11l2-8H7" fill="none" stroke="currentColor" stroke-width="2"/></svg></a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Brewhouse Coffee Co.</h1>
+    <p class="muted">Small-batch coffee, roasted every Tuesday.</p>
+
+    <section class="stats">
+      <h3>Today at the roastery</h3>
+      <p>Bags sold: <strong id="stat-total">…</strong></p>
+      <p>Latest order: <strong id="stat-latest">…</strong></p>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <img src="img/ethiopia.svg" width="160" height="120">
+        <h3>Ethiopia Guji</h3>
+        <p class="muted">Blueberry, jasmine, honey.</p>
+        <button class="buy" data-id="1">Add to cart</button>
+      </article>
+      <article class="card">
+        <img src="img/colombia.svg" width="160" height="120">
+        <h3>Colombia Huila</h3>
+        <p class="muted">Caramel, red apple, cocoa.</p>
+        <button class="buy" data-id="2">Add to cart</button>
+      </article>
+      <article class="card">
+        <img src="img/kenya.svg" width="160" height="120">
+        <h3>Kenya Nyeri</h3>
+        <p class="muted">Blackcurrant, grapefruit.</p>
+        <button class="buy" data-id="3">Add to cart</button>
+      </article>
+    </section>
+
+    <section class="signup">
+      <h3>Get Tuesday's roast list</h3>
+      <form id="signup-form">
+        <input type="email" id="email" placeholder="you@example.com">
+        <select id="grind">
+          <option>Whole bean</option>
+          <option>Espresso</option>
+          <option>Filter</option>
+        </select>
+        <button type="submit" class="primary">Subscribe</button>
+      </form>
+      <button class="icon-only" id="share"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M4 12v7h16v-7M12 3v12M7 8l5-5 5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+    </section>
+  </main>
+
+  <footer>© 2026 Brewhouse Coffee Co.</footer>
+  <script src="app.js"></script>
+</body>
+</html>
