@@ -2,13 +2,13 @@ import { $, $$, esc, store, fmtBytes, download } from "./util.js";
 import { apply, finalState, newState } from "./state.js";
 import { Runner } from "./stream.js";
 import { renderActivity, renderIssues, renderMetrics, renderModels, renderPatches, renderSummary, renderTimeline, renderUsage, errorView } from "./render.js";
-import { clearHistory, renderHistory, saveRun } from "./history.js";
+import { clearHistory, loadHistory, renderHistory } from "./history.js";
 
 /* ------------------------------------------------------------------ theme */
 const root = document.documentElement;
 function setTheme(t) {
   root.dataset.theme = t;
-  const label = t === "dark" ? "Switch to light theme" : "Switch to dark theme";
+  const label = t === "dark" ? "Switch to light theme" : "Switch to dark theme";   // names the theme you will get
   $("#theme").setAttribute("aria-label", label); $("#theme").dataset.tip = label;
 }
 setTheme(store.get("sm_theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
@@ -29,7 +29,7 @@ function route() {
   const view = h === "history" ? "history" : h === "help" ? "help" : showRun ? "run" : "launch";
   for (const v of ["launch", "run", "history", "help"]) $(`#view-${v}`).hidden = v !== view;
   $$(".links a").forEach((a) => { const on = a.dataset.route === (view === "run" || view === "launch" ? "dashboard" : view); on ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"); });
-  if (view === "history") { renderHistory($("#historyBody"), confirmClear); }
+  if (view === "history") { $("#historyBody").setAttribute("aria-busy", "true"); loadHistory().then(() => { $("#historyBody").removeAttribute("aria-busy"); if (!$("#view-history").hidden) renderHistory($("#historyBody"), confirmClear); }); }
   const target = $({ launch: "#heroTitle", run: "#runTitle", history: "#histTitle", help: "#helpTitle" }[view]);
   if (!route.first) { target.setAttribute("tabindex", "-1"); target.focus({ preventScroll: true }); window.scrollTo({ top: 0 }); }
   route.first = false;
@@ -42,15 +42,20 @@ $("#cta").addEventListener("click", (e) => { e.preventDefault(); if (location.ha
 
 /* ------------------------------------------------------------------ launch panel */
 function renderPill() {
-  const p = $("#modePill"), live = (running() || finalState(S)) && S.engine ? S.engine === "live" : engine() === "live";
+  const p = $("#modePill");
+  if (showRun && (running() || finalState(S)) && S.mode === "url") { p.textContent = "Report-only audit · no model calls"; p.classList.add("demo"); return; }
+  const live = (running() || finalState(S)) && S.engine ? S.engine === "live" : engine() === "live";
   p.textContent = live ? `Live · Nemotron on Nebius${health.tavily ? " + Tavily" : ""}` : health.live_available ? "Demo · scripted fixes, real audit" : "Demo mode · live unavailable";
   p.classList.toggle("demo", !live);
 }
 function renderEngineNote() {
   const mode = $("input[name=mode]:checked").value, el = $("#engineNote");
-  if (engine() === "demo") {
+  $("#scripted").closest(".check").hidden = mode === "url";
+  if (mode === "url") {
+    el.textContent = "Report-only audit: no model is called and nothing is changed. You get the issues found and suggested fixes from axe-core's rule guidance.";
+  } else if (engine() === "demo") {
     el.textContent = "Scripted demo mode makes no live model calls. Patches are scripted and only cover the bundled storefront; the audit and every verification are real." +
-      (mode === "upload" ? " For your own site, switch to live mode: scripted demo can audit it but has no fixes for it." : "") +
+      (mode === "upload" || mode === "repo" ? " For your own code, switch to live mode: the scripted demo can audit it but has no fixes for it." : "") +
       (!health.live_available ? " Live mode is unavailable because NEBIUS_API_KEY is not configured on the server (see Help)." : "");
   } else {
     el.textContent = "Live mode calls NVIDIA Nemotron on Nebius Token Factory; the source files relevant to each issue are sent to the model provider. Tavily guidance: " +
@@ -81,7 +86,8 @@ fetch("/api/health").then((r) => r.json()).then((h) => {
 
 $$("input[name=mode]").forEach((r) => r.addEventListener("change", () => {
   $$(".opt").forEach((o) => o.classList.toggle("on", o.querySelector("input").checked));
-  $("#uploadBox").hidden = $("input[name=mode]:checked").value !== "upload";
+  const m = $("input[name=mode]:checked").value;
+  $("#uploadBox").hidden = m !== "upload"; $("#repoBox").hidden = m !== "repo"; $("#urlBox").hidden = m !== "url";
   clearLaunchError(); renderEngineNote();
 }));
 $("#scripted").addEventListener("change", () => { clearLaunchError(); renderEngineNote(); });
@@ -116,7 +122,12 @@ $("#form").addEventListener("submit", async (e) => {
   clearLaunchError();
   const mode = $("input[name=mode]:checked").value;
   if (mode === "upload" && !file) { showLaunchError("Choose a valid .zip first", " Pick a static site archive (up to 8 MB)."); return; }
+  const repoUrl = $("#repoUrl").value.trim(), siteUrl = $("#siteUrl").value.trim();
+  if (mode === "repo" && !/^https:\/\/(www\.)?github\.com\/[^/\s]+\/[^/\s]+/i.test(repoUrl)) { showLaunchError("Enter a GitHub repository URL", " It should look like https://github.com/owner/repo"); $("#repoUrl").focus(); return; }
+  if (mode === "url" && !/^(https?:\/\/)?[^\s/]+\.[^\s/]+/i.test(siteUrl)) { showLaunchError("Enter your website address", " It should look like https://your-site.com"); $("#siteUrl").focus(); return; }
   const fd = new FormData(); fd.append("mode", mode); fd.append("engine", engine());
+  if (mode === "repo") fd.append("repo_url", repoUrl);
+  if (mode === "url") fd.append("site_url", siteUrl);
   if (mode === "upload") fd.append("site", file);
   submitting = true; updateGo();
   const res = await runner.start(fd);
@@ -130,7 +141,7 @@ $("#form").addEventListener("submit", async (e) => {
     $("#useDemo")?.addEventListener("click", () => { $("#scripted").checked = true; clearLaunchError(); renderEngineNote(); });
     return;
   }
-  S = newState(); S.status = "running"; S.engine = engine(); ui.open.clear(); ui.limit = 50; setTab("issues");
+  S = newState(); S.status = "running"; S.engine = mode === "url" ? "demo" : engine(); S.mode = mode; ui.open.clear(); ui.limit = 50; setTab("issues");
   showRun = true; location.hash = "#/"; route(); schedule(true); announce("Audit started.");
 });
 
@@ -140,7 +151,7 @@ const runner = new Runner({
     if (!apply(S, ev)) return;
     if (ev.type === "audit") announce(`Browser audit completed: ${ev.counts.total} issues found.`);
     if (ev.type === "evidence" && ev.stage === "result") announce(`${ev.id} attempt ${ev.attempt}: ${ev.verdict.replace("_", " ")}.`);
-    if (ev.type === "report") { saveRun(S); announce(`Report ready. ${ev.fixed} of ${ev.total} issues fixed.`); }
+    if (ev.type === "report") { announce(ev.audit_only ? `Audit report ready. ${ev.total} issues found.` : `Report ready. ${ev.fixed} of ${ev.total} issues fixed.`); }
     if (ev.type === "error") announce(`Run stopped. ${ev.message}`);
     if (ev.type === "done" || ev.type === "error") { clearBanner(); updateGo(); }
     schedule();
@@ -160,6 +171,16 @@ function banner(kind, title, msg, withNew) {
 }
 const clearBanner = () => { $("#banner").hidden = true; };
 function newAudit() { showRun = false; clearBanner(); route(); $("#heroTitle").focus(); }
+/* "#/" -> "#/" fires no hashchange, so home links must re-route themselves. The logo always goes home;
+   Dashboard goes home once the run has finished, and shows the live run while one is in progress. */
+function goHome(e, keepRun) {
+  e.preventDefault();
+  if (!(keepRun && running())) showRun = false;
+  clearBanner();
+  if (location.hash && location.hash !== "#/") location.hash = "#/"; else route();
+}
+$(".brand").addEventListener("click", (e) => goHome(e, false));
+$('.links a[data-route="dashboard"]').addEventListener("click", (e) => goHome(e, true));
 $("#again").onclick = newAudit;
 $("#stop").onclick = async () => {
   S.cancelRequested = true; $("#stop").disabled = true;
@@ -182,7 +203,7 @@ function render() {
   const [cls, label] = S.status === "error" ? ["bad", "Stopped"] : fin ? [S.cancelRequested ? "warn" : "ok", S.cancelRequested ? "Stopped by you" : "Complete"] : S.cancelRequested ? ["warn", "Stopping"] : ["info work", "Running"];
   chip.className = "chip " + cls; chip.textContent = label;
   $("#stop").hidden = fin; $("#stop").disabled = S.cancelRequested || !S.run; $("#again").hidden = !fin;
-  $("#runMeta").textContent = S.run ? `Run ${S.run} · ${S.engine === "live" ? "live engine" : "scripted demo engine"}` : "Starting…";
+  $("#runMeta").textContent = S.run ? `Run ${S.run} · ${S.mode === "url" || S.report?.audit_only ? "report-only audit" : S.engine === "live" ? "live engine" : "scripted demo engine"}` : "Starting…";
   renderPill();
   if (S.status === "error" && S.error && S.error.kind !== "network") {
     const v = errorView(S.error), b = $("#banner");
@@ -231,7 +252,7 @@ $("#expandAll").onclick = () => { $$("#patchList details").forEach((d) => { d.op
 $("#collapseAll").onclick = () => { $$("#patchList details").forEach((d) => { d.open = false; }); S.patches.forEach((p) => [...ui.open].filter((k) => k.startsWith(`p-${p.id}-${p.attempt}`)).forEach((k) => ui.open.delete(k))); };
 
 function wireSummary() {
-  const r = S.report; if (!r) return;
+  const r = S.report; if (!r || r.audit_only) return;
   const toast = (t) => { const el = $("#toast"); if (el) { el.textContent = t; setTimeout(() => (el.textContent = ""), 2500); } };
   $("#dlPatch")?.addEventListener("click", () => r.diff && download("sitemortem.patch", r.diff));
   $("#dlPr")?.addEventListener("click", () => download("PR.md", r.pr || ""));
@@ -242,7 +263,7 @@ function wireSummary() {
 $("#historyBody").addEventListener("click", (e) => {
   if (e.target.id !== "clearHist") return;
   if (!confirmClear) { confirmClear = true; renderHistory($("#historyBody"), true); $("#clearHist").focus(); return; }
-  clearHistory(); confirmClear = false; renderHistory($("#historyBody"), false);
+  confirmClear = false; clearHistory().then(() => renderHistory($("#historyBody"), false));
 });
 
 addEventListener("pagehide", () => runner.abort());

@@ -55,14 +55,25 @@ class Auditor:
     in the browser as a second layer. Blocked hosts are reported as a limitation, not as site bugs.
     """
 
-    def __init__(self):
+    def __init__(self, pins: dict[str, str] | None = None):
         self.blocked: set[str] = set()
+        self.pins = pins or {}          # remote audits: {hostname: validated public IP}; empty = local copy only
 
     def __enter__(self):
         self._pw = sync_playwright().start()
         self.browser = self._pw.chromium.launch(
-            args=["--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1", "--disable-background-networking"])
+            args=[self._resolver_rules(), "--disable-background-networking"])
         return self
+
+    def _resolver_rules(self) -> str:
+        if not self.pins:
+            return "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1"
+        maps = ", ".join(f"MAP {h} {ip}" for h, ip in self.pins.items())
+        return f"--host-resolver-rules={maps}, MAP * ~NOTFOUND"
+
+    def _ours(self, netloc: str) -> bool:
+        host = netloc.split(":")[0].lower()
+        return netloc == self._origin or (bool(self.pins) and host in self.pins)
 
     def __exit__(self, *a):
         self.browser.close()
@@ -88,7 +99,7 @@ class Auditor:
             issues += found
             for link in links:
                 link = canon(urljoin(url, link))
-                if urlparse(link).netloc == origin and link not in seen and link not in queue:
+                if self._ours(urlparse(link).netloc) and link not in seen and link not in queue:
                     queue.append(link)
         # stable ids + de-duplicate identical fingerprints
         uniq, fps = [], set()
@@ -108,7 +119,7 @@ class Auditor:
 
         def gate(route):
             u = route.request.url
-            if u.startswith(LOCAL_SCHEMES) or urlparse(u).netloc == self._origin:
+            if u.startswith(LOCAL_SCHEMES) or self._ours(urlparse(u).netloc):
                 return route.continue_()
             self.blocked.add(urlparse(u).hostname or "unknown")
             return route.abort("blockedbyclient")
@@ -141,7 +152,7 @@ class Auditor:
                     extra={"url_path": p, "status": resp.status})
 
         def on_failed(req):
-            if urlparse(req.url).netloc != self._origin:
+            if not self._ours(urlparse(req.url).netloc):
                 return          # blocked external request: reported as a limitation, not a site bug
             add("request-failed", "serious", f"{req.method} {urlparse(req.url).path} failed: {req.failure}")
 

@@ -113,7 +113,7 @@ export function apply(s, ev) {
       s.report = ev; s.now = ev.after; s.t.report = { ...(s.t.report || {}), s: "done", t1: ts };
       const left = new Set((ev.remaining || []).map((x) => x.id));
       if ((ev.remaining || []).length === ev.after.total) for (const id of s.issues.keys()) if (!left.has(id)) s.resolved.add(id);
-      act(s, "report", "done", `Report ready: ${ev.fixed} of ${ev.total} issue(s) fixed`, ts);
+      act(s, "report", "done", ev.audit_only ? `Audit report ready: ${ev.total} issue(s) found` : `Report ready: ${ev.fixed} of ${ev.total} issue(s) fixed`, ts);
       break;
     }
     case "usage": s.usage = ev.calls; break;

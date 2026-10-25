@@ -14,3 +14,5 @@ node_modules/
 sitemedic_*/
 .DS_Store
 Thumbs.db
+data/
+*.tgz

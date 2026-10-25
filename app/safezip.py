@@ -47,7 +47,9 @@ def _check_name(name: str) -> tuple[str, ...]:
     return parts
 
 
-def extract_zip(data: bytes) -> Extracted:
+def extract_zip(data: bytes, lenient: bool = False) -> Extracted:
+    """lenient=True is for whole-repository archives: unknown file types, symlinks and vendored folders are
+    skipped (never extracted) instead of rejecting the archive. Path and size protections stay identical."""
     tmp = Path(tempfile.mkdtemp(prefix="sitemedic_up_"))
     out = tmp / "site"
     out.mkdir()
@@ -57,7 +59,7 @@ def extract_zip(data: bytes) -> Extracted:
         except zipfile.BadZipFile:
             raise UserError("That file is not a valid zip archive.")
         infos = z.infolist()
-        if len(infos) > MAX_ENTRIES:
+        if len(infos) > (MAX_ENTRIES * 15 if lenient else MAX_ENTRIES):
             raise UserError(f"Archive has too many entries ({len(infos)} > {MAX_ENTRIES}).")
         total = skipped = 0
         for info in infos:
@@ -70,13 +72,22 @@ def extract_zip(data: bytes) -> Extracted:
                 continue                                 # .git, .env, .DS_Store ... are never extracted
             if info.flag_bits & 0x1:
                 raise UserError("Encrypted archives are not supported.")
+            if lenient and ({"node_modules", "vendor", "__pycache__"} & set(parts)):
+                skipped += 1
+                continue
             if stat.S_ISLNK(info.external_attr >> 16):
+                if lenient:
+                    skipped += 1
+                    continue
                 raise UserError(f"Archive contains a symbolic link: {info.filename[:60]!r}")
             ext = PurePosixPath(info.filename).suffix.lower()
             if ext in SKIP_EXT or parts[-1].lower() in SKIP_NAMES:
                 skipped += 1
                 continue
             if ext not in ALLOWED_EXT:
+                if lenient:
+                    skipped += 1
+                    continue
                 raise UserError(f"File type not allowed in uploads: {info.filename[:60]!r}. "
                                 f"Allowed: HTML, CSS, JS, JSON, images, fonts, text.")
             target = (out / Path(*parts)).resolve()
@@ -98,6 +109,11 @@ def extract_zip(data: bytes) -> Extracted:
                     dst.write(chunk)
         kids = [p for p in out.iterdir()]
         root = kids[0] if len(kids) == 1 and kids[0].is_dir() else out
+        if lenient and not (root / "index.html").is_file():
+            for sub in ("public", "docs", "dist", "build", "site", "www", "src", "static"):
+                if (root / sub / "index.html").is_file():
+                    root = root / sub
+                    break
         if not any(root.rglob("*.html")):
             raise UserError("No .html files found in the archive.")
         return Extracted(root, tmp, skipped)

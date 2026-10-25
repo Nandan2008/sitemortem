@@ -1,13 +1,20 @@
 /* Rendering. Every number and label here comes from reducer state, i.e. from real backend events. */
-import { esc, SEVERITY, sevRank, issueTitle, issueWhere, parseDiff, fmtSecs, clock, fmtBytes } from "./util.js";
+import { esc, SEVERITY, sevRank, issueTitle, issueWhere, parseDiff, fmtSecs, clock, fmtBytes, download } from "./util.js";
 import { BATCH_LABEL, counters, finalState, issueStatus, timeline } from "./state.js";
 
 /* ------------------------------------------------------------------ metrics */
 export function renderMetrics(s, el) {
   const c = counters(s);
+  el.classList.toggle("ro", s.mode === "url" || !!s.report?.audit_only);
   if (!c.b) { el.innerHTML = `<p class="fine">Waiting for the browser audit to finish…</p>`; return; }
   const card = (label, now, was, cls = "") => `<div class="metric ${cls}"><small>${label}</small><div class="nums"><span class="now ${now === 0 && cls !== "plain" ? "zero" : ""}">${now}</span>${was != null ? `<span class="was">${was}</span>` : ""}</div></div>`;
   const b = c.b, n = c.n, js = (x) => x.js ?? x.runtime, net = (x) => x.network ?? 0;
+  if (s.mode === "url" || s.report?.audit_only) {          // report-only: nothing is patched, so no resolved/patch counts
+    el.innerHTML = card("Accessibility violations", b.a11y, null, b.a11y ? "" : "plain") + card("JavaScript errors", js(b), null, js(b) ? "" : "plain") +
+      card("Network failures", net(b), null, net(b) ? "" : "plain") + card("Issues found", b.total, null, b.total ? "bad" : "plain") +
+      card("Pages audited", s.pages.length, null, "plain");
+    return;
+  }
   el.innerHTML =
     card("Accessibility violations", n.a11y, `was ${b.a11y}`) + card("JavaScript errors", js(n), `was ${js(b)}`) +
     card("Network failures", net(n), `was ${net(b)}`) +
@@ -34,6 +41,7 @@ export function renderActivity(s, el, empty, ui) {
 export function renderModels(s, el) {
   if (!s.run) { el.hidden = true; return; }
   el.hidden = false;
+  if (s.mode === "url") { el.innerHTML = `<h2 class="sec">Report-only audit</h2><p class="fine">No model calls and no changes to your site. Suggested fixes come from axe-core's rule guidance.</p>`; return; }
   el.innerHTML = `<h2 class="sec">${s.engine === "live" ? "Live · models on Token Factory" : "Scripted demo"}</h2>` + (s.engine === "live"
     ? (Object.keys(s.models).length ? Object.entries(s.models).map(([k, v]) => `<div class="mono"><b>${esc(k)}</b> ${esc(v)}</div>`).join("") : `<p class="fine">Resolving models…</p>`) +
       `<p class="fine">Tavily: ${s.tavily ? "configured" : "not configured (guidance skipped)"}</p>`
@@ -169,6 +177,7 @@ export function renderSummary(s, ui, el) {
   const e = r?.evidence || {}, w = e.warnings || [];
   const tv = Object.entries(e.tavily || {}).map(([k, n]) => `${k}: ${n}`).join(", ");
   const total = s.startedTs && s.endedTs ? s.endedTs - s.startedTs : null;
+  if (r?.audit_only) { el.innerHTML = auditOnlySummary(r, esc); wireAuditOnly(r); return; }
   el.innerHTML = `
     <section class="card pad"><h2 class="h3">${r ? (r.after.total === 0 ? "All clear" : `${r.fixed} of ${r.total} issues fixed`) : "Run in progress"}</h2>
       <p class="fine">${r ? `${r.after.total} issue(s) remain. Every kept fix was re-tested by the same audit that found the problem.` : "Final numbers appear when the report is ready."}</p>
@@ -195,6 +204,25 @@ export function renderSummary(s, ui, el) {
       <li>Automated testing catches only part of WCAG. A clean result is not a compliance certificate.</li>
       <li>Generated alt text, labels and colours need human review before merging.</li>
       <li>Static sites only (HTML, CSS, JS). External hosts are blocked during the audit, so issues depending on them are not seen.</li></ul></div>`;
+}
+
+function auditOnlySummary(r, esc) {
+  const e = r.evidence || {};
+  return `<section class="card pad"><h2 class="h3">${r.total ? `${r.total} issue(s) found` : "No issues found"}</h2>
+      <p class="fine">${esc(r.site_url || "")} · ${r.pages} page(s) audited in a real browser. Report only: nothing on your site was changed, and these suggestions are not verified fixes.</p>
+      <div class="actions" style="margin-top:12px"><button class="btn primary" id="dlPr">Download report (.md)</button><button class="btn" id="cpPr">Copy report</button><span class="toast" id="toast" role="status"></span></div></section>
+    <section class="card pad" style="margin-top:12px"><h3 class="h3">Suggested fixes</h3>
+      ${(r.suggestions || []).length ? `<ul class="sugg">${r.suggestions.map((g) => `<li><div class="sg-h"><b>${esc(g.rule)}</b><span class="chip">${esc(g.impact)}</span><span class="fine">${g.count} found on ${g.pages.map(esc).join(", ")}</span></div>
+        <p>${esc(g.advice)}</p>${g.example ? `<code class="sg-ex">${esc(g.example)}</code>` : ""}${g.help_url ? `<a href="${esc(g.help_url)}" target="_blank" rel="noopener noreferrer">Learn more about this rule</a>` : ""}</li>`).join("")}</ul>` : `<p class="fine">Nothing to fix from the automated checks.</p>`}</section>
+    ${e.blocked_external?.length ? `<div class="limits"><b>Blocked during the audit</b><ul><li>Third-party hosts were not loaded for safety: ${esc(e.blocked_external.join(", "))}. Pages that depend on them may look incomplete.</li></ul></div>` : ""}
+    <div class="limits"><b>Limitations, stated plainly</b><ul>
+      <li>Automated testing catches only part of WCAG. A clean result is not a compliance certificate.</li>
+      <li>This is an audit of the live pages only. To get patches that are verified in a browser, audit the source repo or a zip of the site.</li></ul></div>`;
+}
+function wireAuditOnly(r) {
+  const toast = (t) => { const el = document.getElementById("toast"); if (el) { el.textContent = t; setTimeout(() => (el.textContent = ""), 2500); } };
+  document.getElementById("dlPr")?.addEventListener("click", () => download("sitemortem-report.md", r.pr || ""));
+  document.getElementById("cpPr")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText(r.pr || ""); toast("Copied to clipboard"); } catch { toast("Copy failed: select the text manually"); } });
 }
 
 export { fmtBytes };

@@ -10,17 +10,6 @@ Built for the **Nebius × NVIDIA Global AI Hackathon** · Track: **Coding and Ag
 
 ---
 
-
-## Screenshots
-
-| Home | Results |
-|---|---|
-| ![Home](docs/screenshots/01-home-dark.png) | ![Results](docs/screenshots/03-results-issues.png) |
-| **Verified patch with diff** | **Summary** |
-| ![Patch diff](docs/screenshots/05-patch-diff.png) | ![Summary](docs/screenshots/06-summary.png) |
-
-Screenshots show the scripted demo engine on the bundled storefront.
-
 ## Why
 
 Roughly one in six people lives with a disability, and most sites still fail basic checks: images with no alt
@@ -104,17 +93,24 @@ cp .env.example .env                                   # Windows: copy .env.exam
 uvicorn app.main:app --reload
 ```
 
-Open http://localhost:8000, choose the demo storefront or upload a `.zip` of your own static site, and press **Start audit**.
+Open http://localhost:8000, choose what stage your project is at, and press **Run audit**:
+
+- **Still building**: paste a public GitHub repository URL. SiteMortem downloads a copy (up to 25 MB, your repo is never
+  modified) and runs the full audit, patch, verify loop. A site inside `public/`, `docs/`, `dist/`, `build/`, `site/`,
+  `www/`, `src/` or `static/` is found automatically.
+- **Already built and live**: paste your website URL. SiteMortem audits up to 6 linked pages in a real browser and returns
+  the issues with suggested fixes. Report only: no model calls and nothing is changed.
+- **Upload a .zip** of a static site, or try the bundled **demo storefront**.
 
 ### The dashboard
-- **Dashboard**: launch panel (demo storefront or ZIP with validation), then a live run view: metric cards (accessibility, JavaScript, network, resolved, remaining, verified/rejected patches, each with before values and a "how calculated" note), a repair-pipeline timeline driven by real backend events, an activity log, and three tabs.
+- **Dashboard**: launch panel (GitHub repo, live site URL, ZIP or demo storefront, with validation), then a live run view: metric cards (accessibility, JavaScript, network, resolved, remaining, verified/rejected patches, each with before values and a "how calculated" note), a repair-pipeline timeline driven by real backend events, an activity log, and three tabs.
 - **Issues** tab: filters (category, severity, resolved/unresolved/rejected), search, sort, expandable technical details.
 - **Patches** tab: per-patch evidence label (PROPOSED / VERIFYING / VERIFIED / ROLLED BACK / REJECTED), diff viewer, reason and verification outcome. VERIFIED appears only when the backend's re-audit confirmed it; there are no AI "confidence" numbers.
 - **Summary** tab: severity before/after, patch outcomes, repair time per group, verification evidence, PR text, downloads.
-- **History**: past runs, stored only in this browser (localStorage). **Help**: how to read the results.
+- **History**: past runs, saved on the server under an anonymous HttpOnly cookie (no account, no login; only run summaries are stored, in `data/history/`). **Help**: how to read the results.
 - Stop button cancels a run; if the connection drops the page resumes the event stream without duplicating events.
 - Light/dark theme, keyboard accessible, respects reduced motion; axe-core is run against SiteMortem's own UI in the tests.
-- Not implemented: a sandboxed live preview of the patched site (download the patch instead), and server-side history.
+- Not implemented: a sandboxed live preview of the patched site (download the patch instead).
 
 ### Demo mode (no keys)
 Leave `.env` keys empty. Pick **Demo engine**. The audit and every verification are real; patches are scripted and
@@ -133,7 +129,7 @@ See [.env.example](.env.example): `SITEMEDIC_MODE`, `NEBIUS_API_KEY`, `NEBIUS_BA
 `SITEMEDIC_RUN_TIMEOUT`, `SITEMEDIC_LIVE_RUNS_PER_HOUR`.
 
 ### API
-`GET /api/health` (ok, live_available, default_mode, tavily, busy) · `POST /api/run` (form: mode, engine, file) streams events ·
+`GET /api/health` (ok, live_available, default_mode, tavily, busy) · `POST /api/run` (form: mode = demo | upload | repo | url, engine, site, repo_url, site_url) streams events · `GET` / `DELETE /api/history` ·
 `GET /api/runs/{id}/events?after=N` resumes a stream · `POST /api/runs/{id}/cancel` · `GET /api/demo-site.zip`.
 Every event carries `run`, `seq` and `ts`.
 
@@ -168,7 +164,11 @@ For a public demo, keep `SITEMEDIC_LIVE_RUNS_PER_HOUR` low: live runs spend your
   extracted; temp files are removed on success and on failure.
 - **SSRF:** an uploaded site's JavaScript runs in headless Chromium on the server. Every request except to the local copy
   of that site is aborted, and DNS is disabled in the browser as a second layer. Blocked hosts are reported as a limitation.
-  There is no "audit this URL" feature; if you add one, apply an allow-list and re-resolve redirects.
+- **URL inputs:** repository URLs must be `https://github.com/owner/repo`; the zip comes from `codeload.github.com` only
+  (no redirects followed), size-capped while streaming, then goes through the same safe extractor. Live-site URLs must be
+  http(s) on port 80/443 with a hostname (no raw IPs); every resolved address must be public (loopback, private,
+  link-local/metadata, CGNAT and reserved ranges are refused), and the audit browser is pinned to the checked addresses
+  so DNS cannot change between the check and the visit. Other hosts are blocked during the audit.
 - **Patches:** validated, applied only to a temporary copy, all-or-nothing, never executed as commands; no dependency installs.
 - **Prompt injection:** site content and search results are treated as untrusted data in the prompts; a model reply can
   only ever produce validated text edits, which are then verified by the audit.
@@ -183,7 +183,7 @@ For a public demo, keep `SITEMEDIC_LIVE_RUNS_PER_HOUR` low: live runs spend your
 
 - Automated testing finds only part of WCAG. A clean result is **not** a compliance certificate.
 - Generated alt text, labels and colours need human review before merging.
-- Works on **static sites** (HTML, CSS, JS). Server-side bugs, auth-protected pages and framework build pipelines are out of scope.
+- Works on **static sites** (HTML, CSS, JS). Live-site audits are report-only: suggestions are not verified fixes. Server-side bugs, auth-protected pages and framework build pipelines are out of scope.
 - Only the pages reachable by links (up to 6) are crawled, and only their initial load is audited (no interaction scripts).
 - External resources (CDNs, fonts) are blocked during the audit for safety, so issues that depend on them are not seen.
 - It does not judge whether alt text is *good*, only that it exists.
@@ -200,6 +200,9 @@ app/tavily.py      Tavily client with explicit ok/empty/skipped/error results
 app/validate.py    strict validation of triage, diagnosis and patches
 app/repo.py        working copy, safe search/replace, rollback, diffs, source hash
 app/safezip.py     safe ZIP extraction
+app/remote.py      GitHub repo download and live-site URL checks (SSRF)
+app/siteaudit.py   report-only audit of a live website
+app/history.py     anonymous cookie-based history store
 app/main.py        FastAPI app, run store + event stream, limits, headers
 static/            dashboard (no build step): index.html, styles.css, js/ (ES modules: main, state, stream, render, history, util)
                    static/vendor/axe.min.js is axe-core

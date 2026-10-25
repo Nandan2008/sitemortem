@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%2376b900'/%3E%3Cpath d='M5 15h4.2l2.4-6 3.6 11 2.4-6.5 1.6 1.5H23' fill='none' stroke='%230d1400' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="/static/styles.css?v=finish7" />
+  <link rel="stylesheet" href="/static/styles.css?v=dual2" />
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
@@ -22,8 +22,9 @@
     </nav>
     <div class="right">
       <span class="pill" id="modePill">Checking…</span>
-      <button class="icon-btn" id="theme" type="button" aria-label="Switch to dark theme" data-tip="Switch to dark theme">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <button class="icon-btn" id="theme" type="button" aria-label="Switch to light theme" data-tip="Switch to light theme">
+        <svg class="i-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="i-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
       </button>
     </div>
   </header>
@@ -63,10 +64,24 @@
         <h2 id="launchTitle" class="h3">Audit a site</h2>
 
         <fieldset class="seg">
-          <legend>What should SiteMortem audit?</legend>
-          <label class="opt on"><input type="radio" name="mode" value="demo" checked /><span class="opt-t">Demo storefront</span><small>A small coffee-shop site with planted accessibility and runtime bugs</small></label>
-          <label class="opt"><input type="radio" name="mode" value="upload" /><span class="opt-t">Upload your own site</span><small>A .zip of a static website (HTML, CSS, JS, images), up to 8 MB</small></label>
+          <legend>What stage is your project at?</legend>
+          <label class="opt"><input type="radio" name="mode" value="repo" /><span class="opt-t">Still building</span><small>Give a public GitHub repo URL. SiteMortem audits it, patches it and verifies each fix</small></label>
+          <label class="opt"><input type="radio" name="mode" value="url" /><span class="opt-t">Already built and live</span><small>Give your site URL. SiteMortem audits it and suggests fixes (report only)</small></label>
+          <label class="opt"><input type="radio" name="mode" value="upload" /><span class="opt-t">Upload a .zip</span><small>A static website (HTML, CSS, JS, images), up to 8 MB</small></label>
+          <label class="opt on"><input type="radio" name="mode" value="demo" checked /><span class="opt-t">Demo storefront</span><small>A small coffee-shop site with planted bugs</small></label>
         </fieldset>
+
+        <div id="repoBox" hidden>
+          <label for="repoUrl" class="lbl">Public GitHub repository URL</label>
+          <input type="url" id="repoUrl" class="txt" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://github.com/owner/repo" aria-describedby="repoHint" />
+          <p id="repoHint" class="fine">Public repositories only, up to 25 MB. SiteMortem downloads a copy, so your repo is never modified. If the site lives in a folder such as public/ or docs/, it is found automatically.</p>
+        </div>
+
+        <div id="urlBox" hidden>
+          <label for="siteUrl" class="lbl">Website address</label>
+          <input type="url" id="siteUrl" class="txt" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://your-site.com" aria-describedby="urlHint" />
+          <p id="urlHint" class="fine">Public websites only. SiteMortem loads up to 6 linked pages in a real browser and reports accessibility and JavaScript problems with suggested fixes. It does not change your site. Third-party hosts (CDNs, analytics) are blocked during the audit.</p>
+        </div>
 
         <div id="uploadBox" hidden>
           <input type="file" id="zip" accept=".zip,application/zip" class="sr-only" aria-label="Site archive (.zip)" aria-describedby="zipStatus" />
@@ -185,7 +200,7 @@
     <!-- ============================================================ HISTORY -->
     <section id="view-history" hidden aria-labelledby="histTitle">
       <h1 id="histTitle" class="h2">Audit history</h1>
-      <p class="sub left">Saved only in this browser. Nothing is sent to a server.</p>
+      <p class="sub left">Saved under an anonymous cookie in this browser. No account, no login. Only run summaries are kept.</p>
       <div id="historyBody"></div>
     </section>
 
@@ -193,9 +208,6 @@
     <section id="view-help" hidden aria-labelledby="helpTitle">
       <h1 id="helpTitle" class="h2">Help</h1>
       <div class="help">
-        <section class="card pad"><h2 class="h3">Demo vs live</h2>
-          <p><b>Scripted demo</b> makes no model calls. Patches are scripted and only cover the bundled storefront; the audit and every verification are real, and the UI labels it as scripted.</p>
-          <p><b>Live</b> calls NVIDIA Nemotron through Nebius Token Factory. It needs <code>NEBIUS_API_KEY</code> in <code>.env</code>. Live never falls back to scripted fixes: if something is misconfigured the run stops and says why. Tavily guidance is optional and reported as skipped if not configured.</p></section>
         <section class="card pad"><h2 class="h3">Reading patch statuses</h2>
           <dl>
             <dt><span class="stat proposed">PROPOSED</span></dt><dd>A patch passed validation and was applied to a temporary copy. It has not been checked yet.</dd>
@@ -204,14 +216,6 @@
             <dt><span class="stat rolled">ROLLED BACK</span></dt><dd>The patch applied but the re-audit failed it, so it was reverted. It is not part of the final patch.</dd>
             <dt><span class="stat rejected">REJECTED</span></dt><dd>No usable patch: the model output was invalid, matched nothing, or tried something not allowed. Nothing was applied.</dd>
           </dl></section>
-        <section class="card pad"><h2 class="h3">Troubleshooting</h2>
-          <ul>
-            <li><b>"Live mode needs NEBIUS_API_KEY"</b>: add the key to <code>.env</code> and restart the server.</li>
-            <li><b>Model not found / configuration problem</b>: run <code>python scripts/list_models.py</code> and pin the IDs in <code>.env</code>.</li>
-            <li><b>Invalid ZIP</b>: use a plain .zip of static files (HTML, CSS, JS, images, fonts). Executables, scripts, symlinks and absolute paths are rejected.</li>
-            <li><b>Connection lost</b>: the page resumes the run automatically from the last event it saw; if that fails, start a new audit.</li>
-            <li><b>Chromium missing</b>: run <code>playwright install chromium</code>.</li>
-          </ul></section>
         <section class="card pad"><h2 class="h3">Limits, stated plainly</h2>
           <ul><li>Automated testing covers only part of WCAG. A clean result is not a compliance certificate.</li>
           <li>Generated alt text, labels and colours need human review before merging.</li>

@@ -25,11 +25,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile  # noqa: E402
-from fastapi.responses import FileResponse, StreamingResponse  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from starlette.background import BackgroundTask  # noqa: E402
+from starlette.concurrency import run_in_threadpool  # noqa: E402
 
-from . import pipeline  # noqa: E402
+from . import history, pipeline, remote, siteaudit  # noqa: E402
 from .agents import NemotronAgent, ScriptedAgent  # noqa: E402
 from .llm import ModelError  # noqa: E402
 from .safety import UserError, redact  # noqa: E402
@@ -159,13 +160,40 @@ def safe_message(e: Exception) -> tuple[str, str, str]:
     return f"Internal error. Reference {ref}; details are in the server log.", "internal", ref
 
 
+def _uid(request: Request) -> tuple[str, bool]:
+    uid = request.cookies.get(history.COOKIE)
+    return (uid, False) if history.valid(uid) else (history.new_id(), True)
+
+
+def _set_cookie(resp, request: Request, uid: str):
+    resp.set_cookie(history.COOKIE, uid, max_age=history.MAX_AGE, httponly=True, samesite="lax",
+                    secure=request.url.scheme == "https", path="/")
+
+
+@app.get("/api/history")
+def get_history(request: Request):
+    uid, fresh = _uid(request)
+    resp = JSONResponse({"history": [] if fresh else history.load(uid)})
+    if fresh:
+        _set_cookie(resp, request, uid)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@app.delete("/api/history")
+def delete_history(request: Request):
+    uid, _ = _uid(request)
+    history.clear(uid)
+    return {"ok": True}
+
+
 @app.post("/api/run")
 async def run(request: Request, mode: str = Form("demo"), engine: str = Form(""), scripted: bool = Form(False),
-              site: UploadFile | None = File(None)):
-    if mode not in ("demo", "upload"):
-        raise HTTPException(400, "mode must be 'demo' or 'upload'.")
+              site: UploadFile | None = File(None), repo_url: str = Form(""), site_url: str = Form("")):
+    if mode not in ("demo", "upload", "repo", "url"):
+        raise HTTPException(400, "mode must be 'demo', 'upload', 'repo' or 'url'.")
     engine = (engine or default_mode()).lower()
-    if scripted:
+    if scripted or mode == "url":      # a live-site audit is report-only and makes no model calls
         engine = "demo"
     if engine not in ("demo", "live"):
         raise HTTPException(400, "engine must be 'demo' or 'live'.")
@@ -177,7 +205,22 @@ async def run(request: Request, mode: str = Form("demo"), engine: str = Form("")
         raise HTTPException(413, "Upload is too large.")
 
     extracted = None
-    if mode == "upload":
+    site_target = None
+    repo_name = ""
+    if mode == "url":
+        try:
+            site_target = remote.validate_site_url(site_url)
+        except UserError as e:
+            raise HTTPException(400, redact(e))
+        source = None
+    elif mode == "repo":
+        try:
+            data, repo_name = await run_in_threadpool(remote.fetch_repo_zip, repo_url)
+            extracted = extract_zip(data, lenient=True)
+        except UserError as e:
+            raise HTTPException(400, redact(e))
+        source = extracted.root
+    elif mode == "upload":
         if site is None:
             raise HTTPException(400, "Choose a .zip of a static site.")
         try:
@@ -203,14 +246,23 @@ async def run(request: Request, mode: str = Form("demo"), engine: str = Form("")
     _expire_runs()
     run_obj = Run()
     _runs[run_obj.id] = run_obj
+    uid, fresh_uid = _uid(request)
+    target_label = site_target[0] if site_target else (repo_name if mode == "repo" else mode)
 
     def worker():
         try:
             run_obj.emit({"type": "run", "engine": engine, "source": mode, "limits": {"timeout_s": RUN_TIMEOUT},
                           "skipped_files": extracted.skipped if extracted else 0})
-            agent = NemotronAgent() if engine == "live" else ScriptedAgent()   # live preflight happens here
-            for ev in pipeline.run(source, agent, deadline_s=RUN_TIMEOUT, should_stop=run_obj.cancel.is_set):
+            agent = None if site_target else (NemotronAgent() if engine == "live" else ScriptedAgent())   # live preflight happens here
+            stream = (siteaudit.run(site_target[0], site_target[1]) if site_target else
+                      pipeline.run(source, agent, deadline_s=RUN_TIMEOUT, should_stop=run_obj.cancel.is_set))
+            for ev in stream:
                 run_obj.emit(ev)
+                if ev.get("type") == "report":
+                    try:
+                        history.add(uid, history.entry_from_report(run_obj.id, engine, mode, target_label, ev))
+                    except Exception:
+                        log.exception("could not save history")
         except Exception as e:
             msg, kind, ref = safe_message(e)
             run_obj.emit({"type": "error", "message": msg, "kind": kind, "ref": ref})
@@ -220,8 +272,11 @@ async def run(request: Request, mode: str = Form("demo"), engine: str = Form("")
             _busy.release()
 
     threading.Thread(target=worker, daemon=True).start()
-    return StreamingResponse(run_obj.stream(), media_type="text/event-stream",
+    resp = StreamingResponse(run_obj.stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    if fresh_uid:
+        _set_cookie(resp, request, uid)
+    return resp
 
 
 @app.get("/api/runs/{run_id}/events")

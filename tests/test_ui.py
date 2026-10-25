@@ -4,6 +4,7 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import zipfile
 from pathlib import Path
@@ -21,7 +22,8 @@ VIEWPORTS = [(360, 740), (390, 844), (768, 1024), (1280, 800), (1920, 1080)]
 
 def start_server(env_extra=None):
     s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
-    env = {**os.environ, "NEBIUS_API_KEY": "", "TAVILY_API_KEY": "", "SITEMEDIC_MODE": "demo", **(env_extra or {})}
+    env = {**os.environ, "NEBIUS_API_KEY": "", "TAVILY_API_KEY": "", "SITEMEDIC_MODE": "demo",
+           "SITEMEDIC_DATA_DIR": tempfile.mkdtemp(prefix="sm_data_"), **(env_extra or {})}
     proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:app", "--port", str(port), "--log-level", "warning"], cwd=ROOT, env=env)
     for _ in range(80):
         try:
@@ -238,6 +240,7 @@ def test_summary_charts_downloads_and_evidence(done):
 def test_history_records_the_run(done):
     page = done
     page.goto(page.url.split("#")[0] + "#/history")
+    expect(page.locator("table.hist tbody tr").first).to_be_visible(timeout=10_000)
     assert page.locator("table.hist tbody tr").count() >= 1 and "Scripted demo" in page.inner_text("table.hist")
     page.screenshot(path=str(SHOTS / "05-history.png"), full_page=True)
 
@@ -385,3 +388,52 @@ def test_live_option_is_selectable_when_a_key_exists_and_pill_says_so(browser, s
         page.close()
     finally:
         proc.terminate(); proc.wait(timeout=10)
+
+
+def test_theme_button_names_the_theme_you_will_get_and_icon_matches(fresh):
+    page = fresh
+    for start in ("dark", "light"):
+        page.evaluate("t => { document.documentElement.dataset.theme = t; }", start)
+        page.click("#theme")
+        now = page.evaluate("document.documentElement.dataset.theme")
+        assert now != start
+        tip = page.get_attribute("#theme", "data-tip")
+        assert tip == ("Switch to light theme" if now == "dark" else "Switch to dark theme")
+        sun = page.is_visible("#theme .i-sun"); moon = page.is_visible("#theme .i-moon")
+        assert (sun, moon) == ((True, False) if now == "dark" else (False, True))
+
+
+def test_mode_choice_shows_the_right_input(fresh):
+    page = fresh
+    for mode, box in (("repo", "#repoBox"), ("url", "#urlBox"), ("upload", "#uploadBox")):
+        page.click(f"label.opt:has(input[value={mode}])")
+        for b in ("#repoBox", "#urlBox", "#uploadBox"):
+            assert page.is_visible(b) == (b == box)
+    page.click("label.opt:has(input[value=repo])")
+    page.fill("#repoUrl", "not a url")
+    page.click("#go")
+    expect(page.locator("#launchError")).to_contain_text("GitHub repository URL")
+    page.click("label.opt:has(input[value=url])")
+    page.fill("#siteUrl", "")
+    page.click("#go")
+    expect(page.locator("#launchError")).to_contain_text("website address")
+
+
+def test_font_size_is_larger_and_mobile_has_no_horizontal_scroll(fresh):
+    page = fresh
+    assert page.evaluate("parseFloat(getComputedStyle(document.body).fontSize)") >= 17
+    page.set_viewport_size({"width": 360, "height": 740})
+    for mode in ("repo", "url", "upload", "demo"):
+        page.click(f"label.opt:has(input[value={mode}])")
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"), mode
+
+
+def test_logo_and_dashboard_return_home_after_a_finished_run(fresh):
+    page = fresh
+    for target in (".brand", '.links a[data-route="dashboard"]'):
+        if not page.is_visible("#view-run"):
+            page.click("#go"); expect(page.locator("#runStatus")).to_have_text("Complete", timeout=180_000)
+        assert page.is_visible("#view-run")
+        page.click(target)
+        expect(page.locator("#view-launch")).to_be_visible()
+        assert page.is_hidden("#view-run")
