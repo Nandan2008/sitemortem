@@ -1,0 +1,20 @@
+# Render Blueprint: the SiteMortem backend (FastAPI + headless Chromium) on Render's free Docker plan.
+services:
+  - type: web
+    name: sitemortem-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: SITEMEDIC_MODE
+        value: live
+      - key: SITEMEDIC_LIVE_RUNS_PER_HOUR
+        value: "5"
+      - key: SITEMEDIC_LOW_MEMORY
+        value: "1"
+      - key: NEBIUS_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false

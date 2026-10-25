@@ -432,7 +432,9 @@ def test_logo_and_dashboard_return_home_after_a_finished_run(fresh):
     page = fresh
     for target in (".brand", '.links a[data-route="dashboard"]'):
         if not page.is_visible("#view-run"):
-            page.click("#go"); expect(page.locator("#runStatus")).to_have_text("Complete", timeout=180_000)
+            page.click("#go")
+            expect(page.locator("#runStatus")).not_to_have_text("Complete", timeout=10_000)   # the new run has started
+            expect(page.locator("#runStatus")).to_have_text("Complete", timeout=180_000)
         assert page.is_visible("#view-run")
         page.click(target)
         expect(page.locator("#view-launch")).to_be_visible()

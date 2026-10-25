@@ -77,12 +77,28 @@ function updateGo() {
   $("#viewRun")?.addEventListener("click", (e) => { e.preventDefault(); showRun = true; route(); });
 }
 
-fetch("/api/health").then((r) => r.json()).then((h) => {
-  health = { ...health, ...h };
-  const cb = $("#scripted");
-  if (!h.live_available) { cb.checked = true; cb.disabled = true; } else { cb.checked = h.default_mode !== "live"; }
-  renderEngineNote();
-}).catch(() => { $("#modePill").textContent = "Server unreachable"; showLaunchError("Cannot reach the SiteMortem server", " Start it with: uvicorn app.main:app"); });
+/* Free hosting puts the backend to sleep when idle; the first request can take about a minute while it wakes. */
+async function loadHealth() {
+  const t0 = Date.now();
+  for (let i = 0; ; i++) {
+    try {
+      const r = await fetch("/api/health", { cache: "no-store" });
+      if (!r.ok) throw new Error(String(r.status));
+      const h = await r.json();
+      health = { ...health, ...h };
+      const cb = $("#scripted");
+      if (!h.live_available) { cb.checked = true; cb.disabled = true; } else { cb.checked = h.default_mode !== "live"; }
+      clearLaunchError(); renderEngineNote();
+      return;
+    } catch {
+      if (Date.now() - t0 > 150000) { $("#modePill").textContent = "Server unreachable"; showLaunchError("Cannot reach the SiteMortem server", " It may be restarting. Reload the page in a minute."); return; }
+      $("#modePill").textContent = "Waking up the server…";
+      if (i === 1) showLaunchError("Starting the audit server", " It sleeps when nobody is using it and takes up to a minute to wake. This page will update on its own.");
+      await new Promise((res) => setTimeout(res, 4000));
+    }
+  }
+}
+loadHealth();
 
 $$("input[name=mode]").forEach((r) => r.addEventListener("change", () => {
   $$(".opt").forEach((o) => o.classList.toggle("on", o.querySelector("input").checked));

@@ -9,3 +9,7 @@ __pycache__/
 *.diff
 *.patch
 .git/
+data/
+*.tgz
+.github/
+tests/

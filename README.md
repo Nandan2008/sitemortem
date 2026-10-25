@@ -152,10 +152,33 @@ docker run --rm -p 8000:8000 --env-file .env sitemedic
 The image is based on Playwright's Python image (Chromium libraries included) and runs `playwright install chromium`
 so the browser matches the installed Playwright version.
 
+### Deploy for free (Render backend + Vercel frontend)
+- **Backend on Render:** New → Blueprint → pick this repo. `render.yaml` creates `sitemortem-api` on the free Docker plan
+  (health check `/api/health`, low-memory Chromium flags, live mode capped at 5 runs/hour). Enter `NEBIUS_API_KEY`
+  (and optionally `TAVILY_API_KEY`) when Render asks for them.
+- **Frontend on Vercel:** import this repo with no build step. `vercel.json` serves `static/` and proxies `/api/*` to the
+  Render service, so the browser only talks to one origin (no CORS, first-party history cookie).
+- Render's free plan sleeps after 15 minutes idle. The page shows "Waking up the server…" and retries for up to a minute.
+  It has 512 MB of RAM: the bundled demo peaks around 400 MB; very heavy sites may not fit.
+
 ### Deploy (Nebius Serverless Endpoint)
-Build the `Dockerfile`, push it to a registry, and create a Serverless Endpoint on port `8000` with
-`NEBIUS_API_KEY` and `TAVILY_API_KEY` as environment variables. One run at a time per instance.
-For a public demo, keep `SITEMEDIC_LIVE_RUNS_PER_HOUR` low: live runs spend your credits.
+Every push to `main` builds the Docker image in GitHub Actions, smoke-tests it (server starts, Chromium audits the demo
+site end to end) and publishes it to `ghcr.io/nandan2008/sitemortem:latest`.
+
+Create the endpoint in the Nebius console (Serverless AI → Endpoints → Create endpoint → Custom):
+- **Image path:** `ghcr.io/nandan2008/sitemortem:latest` · **Port:** `8000` · **Authentication:** none (judges open it in a browser)
+- **Secret environment variables:** `NEBIUS_API_KEY` (and optionally `TAVILY_API_KEY`)
+- **Environment variables:** `SITEMEDIC_MODE=live`, `SITEMEDIC_LIVE_RUNS_PER_HOUR=5`
+- **Compute:** a CPU platform (for example `cpu-d3`, preset `4vcpu-16gb`), disk 20 GiB+
+
+Or with the CLI:
+```bash
+nebius ai endpoint create --name sitemortem --image ghcr.io/nandan2008/sitemortem:latest --container-port 8000 \
+  --env "SITEMEDIC_MODE=live,SITEMEDIC_LIVE_RUNS_PER_HOUR=5" --env-secret NEBIUS_API_KEY=<secret> \
+  --platform cpu-d3 --preset 4vcpu-16gb --disk-size 20Gi --subnet-id <subnet_id>
+```
+One audit runs at a time per instance. Live runs spend your Token Factory credits, so keep the hourly cap low.
+History is stored inside the container and resets when the endpoint restarts.
 
 ## Security
 

@@ -7,6 +7,7 @@ compared with an earlier one to prove a fix worked and nothing new broke.
 """
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -45,6 +46,10 @@ def _norm(text: str) -> str:
 
 
 LOCAL_SCHEMES = ("data:", "blob:", "about:")
+# Small hosts (e.g. 512 MB free tiers): set SITEMEDIC_LOW_MEMORY=1 to keep Chromium to one lean renderer.
+LOW_MEMORY_ARGS = (["--disable-dev-shm-usage", "--disable-gpu", "--disable-extensions", "--no-zygote",
+                    "--renderer-process-limit=1", "--js-flags=--max-old-space-size=192"]
+                   if os.getenv("SITEMEDIC_LOW_MEMORY", "").strip() in ("1", "true", "yes") else [])
 
 
 class Auditor:
@@ -62,7 +67,7 @@ class Auditor:
     def __enter__(self):
         self._pw = sync_playwright().start()
         self.browser = self._pw.chromium.launch(
-            args=[self._resolver_rules(), "--disable-background-networking"])
+            args=[self._resolver_rules(), "--disable-background-networking", *LOW_MEMORY_ARGS])
         return self
 
     def _resolver_rules(self) -> str:
