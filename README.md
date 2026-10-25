@@ -8,6 +8,8 @@ and a pull-request description.
 
 Built for the **Nebius × NVIDIA Global AI Hackathon** · Track: **Coding and Agentic Engineering**
 
+**Live site:** https://sitemortem.vercel.app · **Demo video:** https://youtu.be/ySkgObwE8wo
+
 ---
 
 ## Why
